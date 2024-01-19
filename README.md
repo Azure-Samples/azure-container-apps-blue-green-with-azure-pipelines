@@ -52,7 +52,9 @@ The pipeline is configured to run on every commit to the main branch. The pipeli
       - If the production label is set to `blue` then the blue commit ID is set to the blue commit ID that is currently deployed. If the production label is set to `green` then the green commit ID is set to the green commit ID that is currently deployed. Otherwise the blue commit ID and the green commit ID are set to the latest commit ID
       - Once the variables are set correctly the application is then deployed to the environment that is not in use, this is a Bicep template that deploys the application to the environment.
  3. **waitForValidation** - This stage use Azure Devops Task `ManualValidation@0` to wait for the user to validate the deployment. The user can check that the application is deployed correctly and then approve the deployment to resume the pipeline
- 4. **deployToProduction** - This stage swaps the production label of the environment that is currently in use and sets the traffic to 100% to the environment that is not in use.
+ 4. **Deploy_To_Production** - This stage swaps the production label of the environment that is currently in use and sets the traffic to 100% to the environment that is not in use.
+ 5. **Check_Wether_To_Roll_Back_Application** - This stage use Azure Devops Task `ManualValidation@0` to wait for the user to validate the deployment. The user can check that the application is deployed correctly initiate a rollback if needed.
+ 6. **Roll_Back** - This stage swaps the production label of the environment that is currently in use and sets the traffic to 100% to the environment was previously in use.
 
 For a more detailed explanation of the scripts please refer to [Blue/Green deployments with Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/blue-green-deployment?pivots=azure-cli).
 

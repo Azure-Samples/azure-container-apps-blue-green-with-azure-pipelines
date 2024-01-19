@@ -11,9 +11,10 @@ variables:
   # Ubuntu-latest image is used for building and deploying the app
   vmImageName: 'ubuntu-latest'
 
+
 stages:
-- stage: Deploy_Container_Apps_in_Blue_Green_Environment 
-  displayName: Deploy Container Apps in Blue_Green Environment
+- stage: Build_Test
+  displayName: Build & Test project
   jobs:
   - job: Build # Build the app and run tests
     displayName: Build
@@ -53,11 +54,14 @@ stages:
       - task: Docker@2 # Build and push image to Docker Hub
         inputs:
           containerRegistry: 'dockerRegistryServiceConnection'
-          repository: '$(DOCKER_REPOSITORY)'
+          repository: 'nkiboi/aca-example'
           command: 'buildAndPush'
           Dockerfile: '**/Dockerfile'
+- stage: Deploy
+  displayName: Deploy the app to non-production environment
+  dependsOn: Build_Test
+  jobs:
   - job: Deploy # Deploy the app to non-production environment - in this case what we call the blue environment
-    dependsOn: Build
     displayName: Deploy to Non_production environment
     pool:
       vmImage: $(vmImageName)
@@ -131,9 +135,12 @@ stages:
         overrideParameters: '-appName $(API_NAME) -containerAppsEnvironmentName $(ENVIRONMENT) -registryUsername $(REGISTRY_USERNAME) -registryPassword $(REGISTRY_PASSWORD) -productionLabel $(setvarStep.productionLabel) -latestCommitId $(setvarStep.commitHash) -buildID $(Build.BuildId) -blueCommitID $(setvarStep.blueCommitID) -greenCommitID $(setvarStep.greenCommitID)'
         deploymentMode: 'Incremental'
         deploymentName: 'DeployPipelineTemplate'
+- stage: WaitForValidation
+  displayName: Validate deployed application is running successfully in the new environment
+  dependsOn: Deploy
+  jobs:
   - job: waitForValidation
-    dependsOn: Deploy
-    displayName: Validate deployed application is running successfully in new environment  
+    displayName: Validate deployed application is running successfully in the new environment  
     pool: server
     timeoutInMinutes: 4320 # job times out in 3 days
     steps:   
@@ -143,27 +150,31 @@ stages:
         notifyUsers: '$(NOTIFICATIONEMAIL)'
         instructions: 'Please validate the deployment before moving to production'
         onTimeout: 'resume'
+- stage: Deploy_To_Production
+  displayName: Deploy the application to production and make it active
+  dependsOn:
+    - waitForValidation
+    - Deploy
+  jobs:
   - job: deployToProduction
-    dependsOn:
-      - waitForValidation
-      - Deploy
     variables:  
-      myVarproductionLabel: $[ dependencies.Deploy.outputs['setvarStep.productionLabel'] ]  
-      myVarcommitHash: $[ dependencies.Deploy.outputs['setvarStep.commitHash'] ]
-      myVarblueCommitID: $[ dependencies.Deploy.outputs['setvarStep.blueCommitID'] ]
-      myVargreenCommitID: $[ dependencies.Deploy.outputs['setvarStep.greenCommitID'] ]
+      myVarproductionLabel: $[ stageDependencies.Deploy.Deploy.outputs['setvarStep.productionLabel'] ]  
+      myVarcommitHash: $[ stageDependencies.Deploy.Deploy.outputs['setvarStep.commitHash'] ]
+      myVarblueCommitID: $[ stageDependencies.Deploy.Deploy.outputs['setvarStep.blueCommitID'] ]
+      myVargreenCommitID: $[ stageDependencies.Deploy.Deploy.outputs['setvarStep.greenCommitID'] ]
     displayName: Deploy to production and send 100% traffic to new environement
     pool:
       vmImage: $(vmImageName)
     steps:
 
     - script: |  
-            newProductionLabel=$([[ $myVarproductionLabel = 'blue' ]] && echo 'green' || echo 'blue')
+            newProductionLabel=$([[ $(myVarproductionLabel) == 'blue' ]] && echo 'green' || echo 'blue')
             echo "$newProductionLabel"
             echo "##vso[task.setvariable variable=newProductionLabel]$newProductionLabel"
-            echo "Blue Commit ID: $myVarblueCommitID"
-            echo " Green Commit ID: $myVargreenCommitID"
-            echo " Latest Commit: $myVarcommitHash"
+             echo " Old production label: $(myVarproductionLabel)"
+            echo "Blue Commit ID: $(myVarblueCommitID)"
+            echo " Green Commit ID: $(myVargreenCommitID)"
+            echo " Latest Commit: $(myVarcommitHash)"
             echo " New production label: $newProductionLabel"
       displayName: 'Set Variables for new environment' 
     - task: AzureResourceManagerTemplateDeployment@3 # Switch traffic to new environment and send 100% traffic to it 
@@ -180,3 +191,43 @@ stages:
         overrideParameters: '-appName $(API_NAME) -containerAppsEnvironmentName $(ENVIRONMENT) -registryUsername $(REGISTRY_USERNAME) -registryPassword $(REGISTRY_PASSWORD) -productionLabel $(newProductionLabel) -latestCommitId $(myVarcommitHash) -buildID $(Build.BuildId) -blueCommitID $(myVarblueCommitID) -greenCommitID $(myVargreenCommitID)'
         deploymentMode: 'Incremental'
         deploymentName: 'DeployPipelineTemplate'
+- stage: Check_Wether_To_Roll_Back_Application
+  displayName: Initiate RollBack
+  jobs:
+  - job: waitForValidation
+    displayName: Check wether to Roll Back Application
+    pool: server
+    timeoutInMinutes: 4320 # job times out in 3 days
+    steps:   
+    - task: ManualValidation@0
+      timeoutInMinutes: 1440 # task times out in 1 day
+      inputs:
+        notifyUsers: '$(NOTIFICATIONEMAIL)'
+        instructions: 'Reject this if no rollback is required'
+        onTimeout: 'reject'
+- stage: Roll_Back 
+  displayName: Roll back the application
+  dependsOn: Check_Wether_To_Roll_Back_Application
+  jobs:
+  - job: roll_back_appication
+    displayName: Roll back application to previous release
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'azureSubscription'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+              #!/bin/sh
+              ## Get the current tags from the container app
+              tags=$(az containerapp show -g $RESOURCE_GROUP -n $API_NAME --query tags -o json | tr -d '\r\n') 
+              ## Get the current production label from the tags
+              productionLabel=$(echo $tags | jq -r '.productionLabel')
+              oldProductionLabel=$([[ $productionLabel == 'blue' ]] && echo 'green' || echo 'blue')
+              echo "$oldProductionLabel"
+              az containerapp ingress traffic set \
+              --name "$API_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --label-weight "$oldProductionLabel"=100 $productionLabel=0
