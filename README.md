@@ -40,9 +40,11 @@ To run this sample in Azure Devops, you need:
 
 ### The flow of the pipeline
 
+![Pipeline ](image.png)
+
 The pipeline is configured to run on every commit to the main branch. The pipeline consists of the following stages:
 
- 1. **Build** - Builds the application and pushes the image to the container registry.
+ 1. **Build** - Builds & tests the application and pushes the image to the container registry.
  2. **Deploy**
       - Deploys the application to the environment that is not in use, this can be either the Blue or Green environment. The environment is determined by checking the `productionLabel` tag on the environment. If the tag is set to `blue`, the application is deployed to the Green environment and vice versa.
       - The current blue and green commit IDs are stored as variables in the pipeline. They are obtained by getting the tags as mentioned above.
@@ -56,6 +58,8 @@ The pipeline is configured to run on every commit to the main branch. The pipeli
  5. **Check_Wether_To_Roll_Back_Application** - This stage use Azure Devops Task `ManualValidation@0` to wait for the user to validate the deployment. The user can check that the application is deployed correctly initiate a rollback if needed.
  6. **Roll_Back** - This stage swaps the production label of the environment that is currently in use and sets the traffic to 100% to the environment was previously in use.
 
+NB: For the deployment the pipeline uses the AzureResourceManagerTemplateDeployment@3 task to deploy the application. This task is used to deploy Bicep templates. Another option that is to use the Azure CLI task to deploy Bicep templates.
+
 For a more detailed explanation of the scripts please refer to [Blue/Green deployments with Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/blue-green-deployment?pivots=azure-cli).
 
 ## Resources
@@ -68,3 +72,5 @@ The Album API sample is available in other languages:
 
 | [C#](https://github.com/azure-samples/containerapps-albumapi-csharp) | [Go](https://github.com/azure-samples/containerapps-albumapi-go) | [Python](https://github.com/azure-samples/containerapps-albumapi-python) | [JavaScript](https://github.com/azure-samples/containerapps-albumapi-javascript) |
 | -------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+
+curl 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://vault.azure.net&client_id=7b43ab68-0fbb-4a0b-9f51-2a39380f7215' -H Metadata:true | jq -r '.access_token'
