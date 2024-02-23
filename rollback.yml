@@ -5,8 +5,10 @@
 
 trigger: none
 
-pool:
-  vmImage: ubuntu-latest
+
+variables:
+  # Ubuntu-latest image is used for building and deploying the app
+  vmImageName: 'ubuntu-latest'
 stages:
 - stage: Roll_Back_Application
   displayName: Roll Back Application
