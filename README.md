@@ -56,7 +56,7 @@ The pipeline is configured to run on every commit to the main branch. The pipeli
  3. **waitForValidation** - This stage use Azure Devops Task `ManualValidation@0` to wait for the user to validate the deployment. The user can check that the application is deployed correctly and then approve the deployment to resume the pipeline
  4. **Deploy_To_Production** - This stage swaps the production label of the environment that is currently in use and sets the traffic to 100% to the environment that is not in use.
 
-#### Separate yml Deployment
+#### Roll Back Container Apps
 
 This [rollback pipeline](./rollback.yml) rolls back the container app to the previous version. If you'd like to go back to the previous version. This can be triggered manually at any time.
  1. **Roll_Back** - This stage swaps the production label of the environment that is currently in use and sets the traffic to 100% to the environment was previously in use. 
