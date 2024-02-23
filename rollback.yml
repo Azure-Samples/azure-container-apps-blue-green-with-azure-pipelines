@@ -1,0 +1,33 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+  jobs:
+  - job: roll_back_appication
+    displayName: Roll back application to previous release
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'azureSubscription'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+              #!/bin/sh
+              ## Get the current tags from the container app
+              tags=$(az containerapp show -g $RESOURCE_GROUP -n $API_NAME --query tags -o json | tr -d '\r\n') 
+              ## Get the current production label from the tags
+              productionLabel=$(echo $tags | jq -r '.productionLabel')
+              oldProductionLabel=$([[ $productionLabel == 'blue' ]] && echo 'green' || echo 'blue')
+              echo "$oldProductionLabel"
+              az containerapp ingress traffic set \
+              --name "$API_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --label-weight "$oldProductionLabel"=100 $productionLabel=0
