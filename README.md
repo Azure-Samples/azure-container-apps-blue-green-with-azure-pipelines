@@ -55,10 +55,13 @@ The pipeline is configured to run on every commit to the main branch. The pipeli
       - Once the variables are set correctly the application is then deployed to the environment that is not in use, this is a Bicep template that deploys the application to the environment.
  3. **waitForValidation** - This stage use Azure Devops Task `ManualValidation@0` to wait for the user to validate the deployment. The user can check that the application is deployed correctly and then approve the deployment to resume the pipeline
  4. **Deploy_To_Production** - This stage swaps the production label of the environment that is currently in use and sets the traffic to 100% to the environment that is not in use.
- 5. **Check_Wether_To_Roll_Back_Application** - This stage use Azure Devops Task `ManualValidation@0` to wait for the user to validate the deployment. The user can check that the application is deployed correctly initiate a rollback if needed.
- 6. **Roll_Back** - This stage swaps the production label of the environment that is currently in use and sets the traffic to 100% to the environment was previously in use.
 
-NB: For the deployment the pipeline uses the AzureResourceManagerTemplateDeployment@3 task to deploy the application. This task is used to deploy Bicep templates. Another option that is to use the Azure CLI task to deploy Bicep templates.
+#### Separate yml Deployment
+
+This [rollback pipeline](./rollback.yml) rolls back the container app to the previous version. If you'd like to go back to the previous version. This can be triggered manually at any time.
+ 1. **Roll_Back** - This stage swaps the production label of the environment that is currently in use and sets the traffic to 100% to the environment was previously in use. 
+
+NB: For the deployment the pipeline uses the AzureResourceManagerTemplateDeployment@3 task to deploy the application. This task is used to deploy Bicep templates. Another option  is to use the Azure CLI task to deploy Bicep templates.
 
 For a more detailed explanation of the scripts please refer to [Blue/Green deployments with Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/blue-green-deployment?pivots=azure-cli).
 
