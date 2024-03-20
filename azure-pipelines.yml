@@ -79,6 +79,12 @@ stages:
               tags=$(az containerapp show -g $RESOURCE_GROUP -n $API_NAME --query tags -o json | tr -d '\r\n') 
               ## Get the current production label from the tags
               productionLabel=$(echo $tags | jq -r '.productionLabel')
+              if [ "$productionLabel" = "" ]; then
+              productionLabel='green'
+                 echo "The Production Label has been set to: $productionLabel"
+              else
+                 echo "Current Production Label: $productionLabel"
+              fi    
               ## Get the current blue and green commit IDs from the tags
               current_blueCommitID=$(echo $tags | jq -r '.blueCommitID')
               current_greenCommitID=$(echo $tags | jq -r '.greenCommitID')
